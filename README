@@ -1,0 +1,13 @@
+Create inventory of your ESX and ESXi server using the SOAP interface.
+
+You can import the generated files in:
+ - GLPI with FusionInventory for GLPI
+ - ocsinventory
+ - Uranos
+
+In this example, ../agent is a git clone of the 2.1.x branch of the agent:
+  perl -I../fusioninventory-agent/lib -Ilib ./fusioninventory-esx --user root --password password --host esx-server --directory /tmp
+  [info] Inventory saved in /tmp/esx-server-2011-01-25-14-11-07.ocs
+  ../fusioninventory-agent/fusioninventory-injector -v --file /tmp/esx-server-2011-01-25-14-11-07.ocs -u https://myserver/ocsinventory
+
+http://www.FusionInventory.org
