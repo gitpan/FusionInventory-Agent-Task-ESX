@@ -7,16 +7,20 @@ use XML::TreePP;
 use LWP::UserAgent;
 use HTTP::Cookies;
 
+use FusionInventory::Agent;
 use FusionInventory::VMware::SOAP::Host;
 
 sub new {
     my (undef, $params) = @_;
 
     my $self = {
-        ua => LWP::UserAgent->new(),
+        ua => LWP::UserAgent->new(ssl_opts => { verify_hostname => 0 }),
         url => $params->{url},
         debugDir => $params->{debugDir},
+        lastError => ""
     };
+
+    $self->{ua}->agent('FusionInventory-Agent_v'.$FusionInventory::Agent::VERSION);
 
     my $cookie = new HTTP::Cookies( ignore_discard => 1 );
     $self->{ua}->cookie_jar( $cookie );
@@ -42,7 +46,7 @@ sub _loadSOAPDump {
 }
 
 sub _storeSOAPDump {
-#    return; # DEBUG
+    return; # DEBUG
     my ($self, $action, $data) = @_;
     open(FILE, ">$action.soap") or die;
     print FILE $data;
@@ -71,9 +75,24 @@ sub _send {
         $self->_storeSOAPDump($name, $res->content);
         return $res->content;
     } else {
-        print STDERR $res->status_line, "\n";
+        my $err = $res->content;
+        my $tmpRef = {};
+
+        eval {
+            $err =~ s/.*(<faultstring>.*<\/faultstring>).*/$1/sg;
+            $tmpRef = $self->{tpp}->parse($err);
+        };
+
+        my $errorString = $res->status_line;
+        if ($tmpRef && $tmpRef->{faultstring}) {
+            $errorString .= ": ".$tmpRef->{faultstring};
+        }
+        print STDERR $errorString."\n";
+        $self->{lastError} = $errorString;
         return;
     }
+
+    return 1;
 }
 
 sub _parseAnswer {
@@ -108,7 +127,7 @@ sub _parseAnswer {
 }
 
 sub connect {
-    my ($self, $login, $pw) = @_;
+    my ($self, $user, $password) = @_;
 
     my $req = '<?xml version="1.0" encoding="UTF-8"?>
    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -145,7 +164,7 @@ sub connect {
         <Login xmlns="urn:vim25"><_this type="SessionManager">%s</_this>
         <userName>%s</userName><password>%s</password></Login></soapenv:Body></soapenv:Envelope>';
 
-    $answer = $self->_send('Login', 'Login', sprintf($req, $self->{sessionManager}, $login, $pw));
+    $answer = $self->_send('Login', 'Login', sprintf($req, $self->{sessionManager}, $user, $password));
     return unless $answer;
     return if $answer =~ /ServerFaultCode/m;
 
@@ -189,7 +208,7 @@ sub _getVirtualMachineList {
     my @list;
     if (ref($ref) eq 'HASH') {
         push @list, $ref;
-    } else {
+    } elsif ($ref) {
         @list = @{$ref};
     }
 
@@ -216,6 +235,8 @@ sub _getVirtualMachineById {
         ';
 
     my $answer = $self->_send('RetrieveProperties', 'RetrieveProperties-VM-'.$id, sprintf($req, $self->{propertyCollector}, $id));
+    return [] unless $answer;
+
     # hack to preserve  annotation / comment formating
     $answer =~ s/\n/&#10;/gm;
 

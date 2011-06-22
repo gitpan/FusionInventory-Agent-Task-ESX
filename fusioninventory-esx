@@ -3,14 +3,22 @@
 use strict;
 use warnings;
 
-use FusionInventory::Agent::Task::ESX;
+if ($ENV{REALLIB}) {
+    @INC = split(/:/,$ENV{REALLIB});
+}
 
-use Getopt::Long;
+eval "
+use FusionInventory::Agent::Task::ESX;
+use FusionInventory::Agent::AccountInfo;
+use Getopt::Long;";
+if ($@) {
+    die $@;
+}
 
 my $args = {};
 
 GetOptions(
-        $args, 'host=s', 'user=s', 'password=s', 'directory=s'
+        $args, 'host=s', 'user=s', 'password=s', 'directory=s', 'tag=s'
         );
 
 usage() unless $args->{host} and $args->{user} and $args->{password} and $args->{directory};
@@ -28,7 +36,7 @@ sub usage {
         --directory /somewhere : the location where the .ocs file must be written
 
         EXAMPLE:
-        $0 --host myesx --user foo --password bar --directory /tmp
+        fusioninventory-esx --host myesx --user foo --password bar --directory /tmp
 
         Active Directory users, please note the AD authentification don't work. You must
         create a account on the VMware server.
@@ -44,10 +52,10 @@ sub usage {
         This tool is part of the FusionInventory distribution.
 EOF
 
-        exit(1);
+    exit(1);
 }
 
-use FusionInventory::Agent::Task::ESX;
+
 
 my $esx = FusionInventory::Agent::Task::ESX->new({
     config => {
@@ -55,28 +63,39 @@ my $esx = FusionInventory::Agent::Task::ESX->new({
     }
 });
 
-$esx->connect({
-            addr => $args->{host},
-            login => $args->{user},
-            passwd => $args->{password},
-            });
+if (!$esx->connect({
+            host => $args->{host},
+            user => $args->{user},
+            password => $args->{password},
+            })) {
+    exit 1;
+}
+
+# Put ACCOUNTINFO values in the inventory
+my $accountinfo = FusionInventory::Agent::AccountInfo->new({
+#    logger => $logger,
+    config => {},
+#    target => $self,
+    });
+$accountinfo->set('TAG', $args->{tag});
 
 my $hostIds = $esx->getHostIds();
 foreach my $hostId (@$hostIds) {
     my $inventory = $esx->createInventory($hostId);
+    $accountinfo->setAccountInfo($inventory);
 
     $inventory->writeXML();
 }
-
+exit(0);
 __END__
 
 =head1 NAME
 
-fusioninventory-agent - vCenter/ESX/ESXi remote inventory for FusionInventory or OCSInventory
+fusioninventory-esx - vCenter/ESX/ESXi remote inventory for FusionInventory or OCSInventory
 
 =head1 SYNOPSIS
 
-B<fusioninventory-esx> S<[ I<--host host> I<--user user> I<--password password> I<--directory /tmp> ]>
+B<fusioninventory-esx> S<[ I<--host host> I<--user user> I<--password password> I<--directory /tmp> I<--tag tag>> ]
 
 =head1 EXAMPLES
 
@@ -114,6 +133,10 @@ This module has been written by TECLIB'.
 The maintainer is Goneri LE BOUDER <goneri@rulezlan.org>
 
 The FusionInventory project L<fusioninventory-devel@lists.alioth.debian.org>
+
+=head1 SECURITY
+
+The SSL hostname check of the server is disabled.
 
 =head1 SEE ALSO
 

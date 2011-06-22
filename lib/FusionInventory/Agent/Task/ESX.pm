@@ -1,10 +1,12 @@
 package FusionInventory::Agent::Task::ESX;
 
-our $VERSION = "1.0.1";
+our $VERSION = "1.1.1";
 
+use Data::Dumper;
 use strict;
 use warnings;
 
+use FusionInventory::Agent::REST;
 use FusionInventory::Agent::XML::Query::Inventory;
 use FusionInventory::Agent::Config;
 use FusionInventory::VMware::SOAP;
@@ -13,11 +15,12 @@ use FusionInventory::Logger;
 sub connect {
     my ($self, $job) = @_;
 
-    my $url = 'https://'.$job->{addr}.'/sdk/vimService';
+    my $url = 'https://'.$job->{host}.'/sdk/vimService';
 
     my $vpbs = FusionInventory::VMware::SOAP->new({ url => $url, vcenter => 1 });
-    if (!$vpbs->connect($job->{login}, $job->{passwd})) {
-        die "failed to log in\n";
+    if (!$vpbs->connect($job->{user}, $job->{password})) {
+        $self->{lastError} = $vpbs->{lastError};
+        return;
     }
 
     $self->{vpbs} = $vpbs;
@@ -63,7 +66,7 @@ sub createInventory {
     my $inventory = FusionInventory::Agent::XML::Query::Inventory->new({
             logger => $self->{logger},
             config => $self->{config},
-            target => { deviceid => $self->createFakeDeviceid($host), path => '/tmp', vardir => '/tmp/toto' }
+            target => { deviceid => $self->createFakeDeviceid($host) }
             });
 
     $inventory->{isInitialised}=1;
@@ -126,24 +129,24 @@ sub createInventory {
 }
 
 
-sub getJobs {
-    my ($self) = @_;
-
-    my $logger = $self->{logger};
-    my $network = $self->{network};
-
-    my $jsonText = $network->get ({
-        source => $self->{backendURL}.'/?a=getJobs&d=TODO',
-        timeout => 60,
-        });
-    if (!defined($jsonText)) {
-        $logger->debug("No answer from server for deployment job.");
-        return;
-    }
-
-
-    return from_json( $jsonText, { utf8  => 1 } );
-}
+#sub getJobs {
+#    my ($self) = @_;
+#
+#    my $logger = $self->{logger};
+#    my $network = $self->{network};
+#
+#    my $jsonText = $network->get ({
+#        source => $self->{backendURL}.'/?a=getJobs&d=TODO',
+#        timeout => 60,
+#        });
+#    if (!defined($jsonText)) {
+#        $logger->debug("No answer from server for deployment job.");
+#        return;
+#    }
+#
+#
+#    return from_json( $jsonText, { utf8  => 1 } );
+#}
 
 sub getHostIds {
     my ($self) = @_;
@@ -174,11 +177,8 @@ sub main {
             config => $self->{config}
         });
 
+    return unless $target;
     return unless $target->{type} eq 'server';
-
-    $self->{backendURL} = $target->{path}."/esx/";
-    # DEBUG:
-    $self->{backendURL} = "http://nana.rulezlan.org/deploy/ocsinventory/esx/";
 
     my $network = $self->{network} = FusionInventory::Agent::Network->new ({
 
@@ -188,22 +188,75 @@ sub main {
 
         });
 
-    my $jobs = $self->getJobs();
-    return unless $jobs;
-    return unless ref($jobs) eq 'ARRAY';
-    foreach my $job (@$jobs) {
-        my $esx = FusionInventory::Agent::Task::ESX->new({
-                config => $config
-        });
 
-        $esx->connect($job);
+    my $globalRest = FusionInventory::Agent::REST->new(
+            "url" => $target->{path},
+            "network" => $network
+            );
+    my $globalRemoteConfig = $globalRest->getConfig(
+            machineid => $target->{deviceid},
+            task => { ESX => $VERSION},
+    );
+    return unless $globalRemoteConfig->{schedule};
+    return unless ref($globalRemoteConfig->{schedule}) eq 'ARRAY';
+
+    my $esxRemote;
+    foreach my $job (@{$globalRemoteConfig->{schedule}}) {
+        next unless $job->{task} eq "ESX";
+        $esxRemote = $job->{remote};
+    }
+    if (!$esxRemote) {
+       $logger->info("ESX support disabled server side.");
+       return;
+    }
+    my $esxRest = FusionInventory::Agent::REST->new(
+            "url" => $esxRemote,
+            "network" => $network
+            );
+    if (!$esxRest) {
+        $logger->error("Failed to get parameter from `$esxRemote'");
+        exit;
+    }
+
+
+    my $jobs = $esxRest->getJobs(
+              machineid => $target->{deviceid},
+    );
+
+    return unless $jobs;
+    return unless ref($jobs->{jobs}) eq 'ARRAY';
+    $logger->info("Got ".int(@{$jobs->{jobs}})." VMware host(s) to inventory.");
+
+    my $esx = FusionInventory::Agent::Task::ESX->new({
+            config => $config
+            });
+
+
+    foreach my $job (@{$jobs->{jobs}}) {
+
+        if (!$esx->connect($job)) {
+           $esxRest->setLog(
+              machineid => $target->{deviceid},
+              part => 'login',
+              uuid => $job->{uuid},
+              msg => $esx->{lastError},
+              code => 'ko'
+           );
+           next;
+        }
 
         my $hostIds = $esx->getHostIds();
         foreach my $hostId (@$hostIds) {
             my $inventory = $esx->createInventory($hostId);
 
-            $inventory->writeXML();
+            my $response = $network->send({message => $inventory});
         }
+        $esxRest->setLog(
+                machineid => $target->{deviceid},
+                uuid => $job->{uuid},
+                code => 'ok'
+        );
+
     }
 
     return $self;
