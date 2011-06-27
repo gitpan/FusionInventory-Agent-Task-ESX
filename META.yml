@@ -21,9 +21,10 @@ requires:
   FusionInventory::Agent: "\x02\x01\t"
   Getopt::Long: 0
   HTTP::Cookies: 0
+  JSON: 0
   LWP::UserAgent: 0
   XML::TreePP: 0
   perl: 5.8.0
 resources:
   license: http://opensource.org/licenses/gpl-license.php
-version: 1.1.1
+version: 1.1.2
