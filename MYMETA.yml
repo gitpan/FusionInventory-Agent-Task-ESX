@@ -1,14 +1,15 @@
 ---
 abstract: 'ESX and ESXi inventory'
+author: []
 build_requires:
   ExtUtils::MakeMaker: 6.57
   Test::Exception: 0
   Test::More: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.57
+  ExtUtils::MakeMaker: 0
 distribution_type: module
-dynamic_config: 1
-generated_by: 'Module::Install version 1.04'
+dynamic_config: 0
+generated_by: 'ExtUtils::MakeMaker version 6.57_05'
 license: gpl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -16,8 +17,8 @@ meta-spec:
 name: FusionInventory-Agent-Task-ESX
 no_index:
   directory:
-    - inc
     - t
+    - inc
 requires:
   FusionInventory::Agent: "\x02\x01\t"
   Getopt::Long: 0
@@ -25,7 +26,5 @@ requires:
   JSON: 0
   LWP::UserAgent: 0
   XML::TreePP: 0
-  perl: 5.8.0
-resources:
-  license: http://opensource.org/licenses/gpl-license.php
+  perl: 5.008
 version: 1.1.3

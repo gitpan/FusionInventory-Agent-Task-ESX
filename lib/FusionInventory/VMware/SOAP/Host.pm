@@ -157,65 +157,49 @@ sub getControllers {
     return $ret;
 }
 
+sub _getNic {
+    my ($ref, $isVirtual) = @_;
+
+    return {
+        DESCRIPTION => $ref->{device},
+        DRIVER      => $ref->{driver},
+        IPADDRESS   => eval { $ref->{spec}{ip}{ipAddress} },
+        IPMASK      => eval { $ref->{spec}{ip}{subnetMask} },
+        MACADDR     => eval { $ref->{mac} || $ref->{spec}{mac} },
+        MTU         => eval { $ref->{spec}{mtu} },
+        PCISLOT     => $ref->{pci},
+        STATUS      => eval { $ref->{spec}{ip}{ipAddress} } ? 'Up' : 'Down',
+        VIRTUALDEV  => $isVirtual,
+        SPEED       => eval { $ref->{spec}{linkSpeed}{speedMb} },
+    }
+}
+
 sub getNetworks {
     my ($self) = @_;
 
     my $ret = [];
-    foreach (eval{@{getArray($self->{hash}[0]{config}{network}{pnic})}}) {
-        push @$ret, {
-                DESCRIPTION => $_->{device},
-                DRIVER => $_->{driver},
-                IPADDRESS => $_->{ip}{ipAddress},
-#            IPGATEWAY => '',
-                IPMASK => $_->{ip}{subnetMask},
-#            IPSUBNET => '',
-                MACADDR => $_->{mac},
-#            MTU => '',
-                PCISLOT => $_->{pci},
-                STATUS => $_->{ip}{ipAddress}?'Up':'Down',
-#            TYPE => '',
-#            VIRTUALDEV => '',
-#            SLAVES => '',
-#            MANAGEMENT => '',
-                SPEED => eval { $_->{spec}{linkSpeed}{speedMb} || '' },
-                };
-    }
 
-    foreach (eval{@{getArray($self->{hash}[0]{config}{network}{vnic})}}) {
-        push @$ret, {
-                DESCRIPTION => $_->{device},
-                DRIVER => $_->{driver},
-                IPADDRESS => eval{ $_->{ip}{ipAddress} },
-#            IPGATEWAY => '',
-                IPMASK => $_->{ip}{subnetMask},
-#            IPSUBNET => '',
-                MACADDR => $_->{mac},
-#            MTU => '',
-                PCISLOT => $_->{pci},
-                STATUS => $_->{ip}{ipAddress}?'Up':'Down',
-#            TYPE => '',
-                VIRTUALDEV => '1',
-#            SLAVES => '',
-#            MANAGEMENT => '',
-                SPEED => eval { $_->{spec}{linkSpeed}{speedMb} || '' },
-                };
+    my $seen = {};
+
+    foreach my $nicType (qw/vnic pnic consoleVnic/)  {
+        foreach ( eval { @{ getArray( $self->{hash}[0]{config}{network}{$nicType} ) } }
+                )
+        {
+            next if $seen->{$_->{device}}++;
+            my $isVirtual = $nicType eq 'vnic'?1:0;
+            push @$ret, _getNic($_, $isVirtual);
+        }
     }
 
     my @vnic;
     eval { push @vnic, $self->{hash}[0]{config}{network}{consoleVnic} if $self->{hash}[0]{config}{network}{consoleVnic}; };
     eval { push @vnic, $self->{hash}[0]{config}{vmotion}{netConfig}{candidateVnic} if $self->{hash}[0]{config}{vmotion}{netConfig}{candidateVnic} };
-    foreach (@vnic) {
-        next if ref($_) ne 'HASH';
+    foreach my $entry (@vnic) {
+        foreach ( @{ getArray($entry) } ) {
+            next if $seen->{$_->{device}}++;
 
-        push @$ret, {
-                DESCRIPTION => $_->{device},
-                IPADDRESS => $_->{spec}{ip}{ipAddress},
-                IPMASK => $_->{spec}{ip}{subnetMask},
-                MACADDR => $_->{spec}{mac},
-                MTU => $_->{spec}{ip}{mtu},
-                STATUS => $_->{spec}{ip}{ipAddress}?'Up':'Down',
-                VIRTUALDEV => '1',
-                };
+            push @$ret, _getNic($_, 1);
+        }
     }
 
     return $ret;
