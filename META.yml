@@ -1,14 +1,15 @@
 ---
 abstract: 'ESX and ESXi inventory'
 build_requires:
-  ExtUtils::MakeMaker: 6.57
+  ExtUtils::MakeMaker: 6.59
   Test::Exception: 0
-  Test::More: 0
+  Test::MockModule: 0
+  Test::MockObject: 0
 configure_requires:
-  ExtUtils::MakeMaker: 6.57
+  ExtUtils::MakeMaker: 6.59
 distribution_type: module
 dynamic_config: 1
-generated_by: 'Module::Install version 1.04'
+generated_by: 'Module::Install version 1.06'
 license: gpl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -19,13 +20,8 @@ no_index:
     - inc
     - t
 requires:
-  FusionInventory::Agent: "\x02\x01\t"
-  Getopt::Long: 0
-  HTTP::Cookies: 0
   JSON: 0
-  LWP::UserAgent: 0
-  XML::TreePP: 0
   perl: 5.8.0
 resources:
   license: http://opensource.org/licenses/gpl-license.php
-version: 1.1.3
+version: 2.1.0

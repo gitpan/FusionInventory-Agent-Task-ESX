@@ -3,18 +3,10 @@
 use strict;
 use warnings;
 
-if ($ENV{REALLIB}) {
-    @INC = split(/:/,$ENV{REALLIB});
-}
-
-eval "
 use FusionInventory::Agent::Task::ESX;
-use FusionInventory::Agent::AccountInfo;
-use FusionInventory::Logger;
-use Getopt::Long;";
-if ($@) {
-    die $@;
-}
+#use FusionInventory::Agent::AccountInfo;
+use FusionInventory::Agent::Logger;
+use Getopt::Long;
 
 my $args = {};
 
@@ -35,12 +27,13 @@ sub usage {
         --user username        : the user name
         --password xxxx        : the password
         --directory /somewhere : the location where the .ocs file must be written
+        --tag xxxx             : set a tag for the inventoried machine
 
         EXAMPLE:
         fusioninventory-esx --host myesx --user foo --password bar --directory /tmp
 
-        Active Directory users, please note the AD authentification don't work. You must
-        create a account on the VMware server.
+        Active Directory users, please note the AD authentication doesn't work.
+        You must create a account on the VMware server.
 
         You can import the .ocs file in your inventory server with the fusioninventory-injector tool.
         fusioninventory-injector -v --file /tmp/*.ocs -u https://myserver/ocsinventory
@@ -57,12 +50,9 @@ EOF
 }
 
 
-
-my $esx = FusionInventory::Agent::Task::ESX->new({
-    config => {
-        local => $args->{directory}
-    }
-});
+my $esx = FusionInventory::Agent::Task::ESX->new(
+    target => {},
+);
 
 if (!$esx->connect({
             host => $args->{host},
@@ -73,20 +63,39 @@ if (!$esx->connect({
 }
 
 # Put ACCOUNTINFO values in the inventory
-my $logger = FusionInventory::Logger->new();
-my $accountinfo = FusionInventory::Agent::AccountInfo->new({
-    logger => $logger,
-    config => {},
-#    target => $self,
-    });
-$accountinfo->set('TAG', $args->{tag});
+my $logger = FusionInventory::Agent::Logger->new();
+#my $accountinfo = FusionInventory::Agent::AccountInfo->new({
+#    logger => $logger,
+#    config => {},
+##    target => $self,
+#    });
+#$accountinfo->set('TAG', $args->{tag});
 
 my $hostIds = $esx->getHostIds();
 foreach my $hostId (@$hostIds) {
     my $inventory = $esx->createInventory($hostId);
-    $accountinfo->setAccountInfo($inventory);
+    #$accountinfo->setAccountInfo($inventory);
 
-    $inventory->writeXML();
+   # $inventory->writeXML();
+
+    my $file =  $args->{directory} . '/' . $esx->createFakeDeviceid($esx->{vpbs}->getHostFullInfo($hostId)) . ".ocs";
+
+    if (open my $handle, '>', $file) {
+        my $tpp = XML::TreePP->new(indent => 2);
+        print $handle $tpp->write({
+            REQUEST => {
+            CONTENT => $inventory->{content},
+            DEVICEID => $inventory->{deviceid},
+            QUERY => "INVENTORY",
+            }
+        });
+
+                close $handle;
+        print("Inventory saved in $file\n");
+    } else {
+        print("Can't write to $file: $?\n");
+    }
+
 }
 exit(0);
 __END__
@@ -125,7 +134,7 @@ Supported systems:
 =back
 
 
-Active Directory users, please note the AD authentification don't work. You must
+Active Directory users, please note the AD authentication doesn't work. You must
 create a account on the VMware server.
 
 =head1 AUTHORS
@@ -198,8 +207,8 @@ http://forge.fusionInventory.org
 
 =head1 COPYRIGHT
 
-Copyright (C) 2011 FusionInventory project
-Copyright (C) 2011 TECLIB' ( http://www.teclib.com )
+Copyright (C) 2011-2012 FusionInventory project
+Copyright (C) 2011-2012 TECLIB' ( http://www.teclib.com )
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
