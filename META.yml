@@ -20,8 +20,10 @@ no_index:
     - inc
     - t
 requires:
+  Getopt::Long: 0
   JSON: 0
+  Pod::Usage: 0
   perl: 5.8.0
 resources:
   license: http://opensource.org/licenses/gpl-license.php
-version: 2.1.0
+version: 2.2.0

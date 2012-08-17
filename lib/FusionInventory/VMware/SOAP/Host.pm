@@ -298,8 +298,9 @@ sub getVirtualMachines {
         my $status =
             $machine->{summary}{runtime}{powerState} eq 'poweredOn'  ? 'running' :
             $machine->{summary}{runtime}{powerState} eq 'poweredOff' ? 'off'     :
+            $machine->{summary}{runtime}{powerState} eq 'suspended'  ? 'pause'   :
                                                                     undef     ;
-        print "Unknown status\n" if !$status;
+        print "Unknown status (".$machine->{summary}{runtime}{powerState}.")\n" if !$status;
 
         my @mac;
         foreach my $device (_asArray($machine->{config}{hardware}{device})) {
@@ -310,6 +311,14 @@ sub getVirtualMachines {
 
         # hack to preserve  annotation / comment formating
         $comment =~ s/\n/&#10;/gm if $comment;
+
+        if (
+            defined($_->[0]{summary}{config}{template})
+            &&
+            $_->[0]{summary}{config}{template} eq 'true'
+            ) {
+            next;
+        }
 
         push @virtualMachines,
           {

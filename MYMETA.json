@@ -4,7 +4,7 @@
       "unknown"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.120630",
+   "generated_by" : "ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "open_source"
    ],
@@ -35,11 +35,13 @@
       },
       "runtime" : {
          "requires" : {
+            "Getopt::Long" : "0",
             "JSON" : "0",
+            "Pod::Usage" : "0",
             "perl" : "5.008"
          }
       }
    },
    "release_status" : "stable",
-   "version" : "v2.1.0"
+   "version" : "v2.2.0"
 }
