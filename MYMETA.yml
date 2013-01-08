@@ -25,4 +25,4 @@ requires:
   JSON: 0
   Pod::Usage: 0
   perl: 5.008
-version: v2.2.0
+version: v2.2.1
